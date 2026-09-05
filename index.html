@@ -98,7 +98,7 @@
 <script>
 const URL="https://ucnbbgjbjpqhxcpbnezb.supabase.co";
 const KEY="sb_publishable_SsCjjYicaKcyZHYmw50DPA_Yb8E2Kb2";
-const db=supabase.createClient(URL,KEY);
+const db=supabase.createClient(URL,KEY,{auth:{lock:(name,timeout,fn)=>fn()}});
 let recipes=[];
 
 async function login(){
