@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#6b4f3a">
+<title>Notre carnet de recettes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fffaf4;color:#3d3028}header{background:#6b4f3a;color:white;padding:24px 18px;text-align:center}h1{margin:0 0 5px;font-size:27px}header p{margin:0;opacity:.9}.wrap{max-width:850px;margin:auto;padding:18px}.box{background:white;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px #00000012}input,textarea,select,button{font:inherit;width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:5px 0 10px}textarea{min-height:110px}button{background:#6b4f3a;color:white;border:0;font-weight:600;cursor:pointer}.secondary{background:#eee;color:#3d3028}.danger{background:#a33}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.recipe{border-left:5px solid #6b4f3a}.recipe h3{margin:0 0 5px}.meta{font-size:13px;color:#76685e}.tags{margin:8px 0}.tag{display:inline-block;background:#f0e5d8;border-radius:20px;padding:4px 8px;margin:2px;font-size:12px}.hidden{display:none}.row{display:flex;gap:8px}.row button{flex:1}.small{font-size:13px}.logout{background:#fff;color:#6b4f3a;margin-top:8px}.empty{text-align:center;color:#76685e;padding:25px}label{font-weight:600;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+<h1>🍳 Notre carnet de recettes</h1>
+<p>Séverine & Jonathan</p>
+</header>
+
+<div class="wrap">
+
+<div id="login" class="box">
+<h2>🔐 Connexion</h2>
+<p class="small">Connecte-toi avec ton compte du carnet.</p>
+<input id="email" type="email" placeholder="Adresse e-mail">
+<input id="password" type="password" placeholder="Mot de passe">
+<button onclick="login()">Se connecter</button>
+<p id="msg" class="small"></p>
+</div>
+
+<div id="app" class="hidden">
+
+<div class="box">
+<div class="row">
+<button onclick="showForm()">➕ Nouvelle recette</button>
+<button class="secondary" onclick="loadRecipes()">🔄 Actualiser</button>
+</div>
+<input id="search" placeholder="🔎 Rechercher une recette..." oninput="render()">
+<select id="filter" onchange="render()">
+<option value="">Toutes les catégories</option>
+<option>🥘 Plats</option>
+<option>🥩 Viandes</option>
+<option>🍝 Pâtes, riz & gratins</option>
+<option>🥕 Légumes & accompagnements</option>
+<option>🍰 Desserts</option>
+<option>🥖 Boulangerie</option>
+<option>🫙 Sauces & préparations</option>
+<option>🇱🇴 Recettes lorraines</option>
+<option>🤖 TM7</option>
+<option>⭐ Nos incontournables</option>
+<option>🧪 À tester</option>
+</select>
+</div>
+
+<div id="form" class="box hidden">
+<h2 id="formTitle">➕ Nouvelle recette</h2>
+<input type="hidden" id="editId">
+<label>Nom de la recette</label>
+<input id="title" placeholder="Ex. Pâté lorrain">
+<label>Catégorie</label>
+<select id="category">
+<option>🥘 Plats</option><option>🥩 Viandes</option>
+<option>🍝 Pâtes, riz & gratins</option><option>🥕 Légumes & accompagnements</option>
+<option>🍰 Desserts</option><option>🥖 Boulangerie</option>
+<option>🫙 Sauces & préparations</option><option>🇱🇴 Recettes lorraines</option>
+<option>🤖 TM7</option>
+</select>
+<div class="grid">
+<div><label>Portions</label><input id="servings" type="number"></div>
+<div><label>Préparation (min)</label><input id="prep" type="number"></div>
+</div>
+<label>Cuisson (min)</label>
+<input id="cook" type="number">
+<label>Ingrédients — un par ligne</label>
+<textarea id="ingredients" placeholder="600 g d'échine de porc&#10;2 échalotes&#10;10 cl de vin"></textarea>
+<label>Étapes — une par ligne</label>
+<textarea id="steps" placeholder="Couper la viande...&#10;Faire mariner...&#10;Cuire..."></textarea>
+<label>Adaptations possibles</label>
+<textarea id="adaptations"></textarea>
+<label>Astuces / ajustements de nos essais</label>
+<textarea id="tips"></textarea>
+<label>Statut</label>
+<select id="status"><option value="a_tester">🧪 À tester</option><option value="validee">⭐ Validée</option></select>
+<label><input id="tm7" type="checkbox" style="width:auto"> 🤖 Adaptée au TM7</label>
+<label><input id="lorraine" type="checkbox" style="width:auto"> 🇱🇴 Recette lorraine</label>
+<label><input id="favorite" type="checkbox" style="width:auto"> ❤️ Incontournable</label>
+<div class="row">
+<button onclick="saveRecipe()">💾 Enregistrer</button>
+<button class="secondary" onclick="hideForm()">Annuler</button>
+</div>
+</div>
+
+<div id="recipes"></div>
+
+<button class="logout" onclick="logout()">Se déconnecter</button>
+</div>
+</div>
+
+<script>
+const URL="https://ucnbbgjbjpqhxcpbnezb.supabase.co";
+const KEY="sb_publishable_SsCjjYicaKcyZHYmw50DPA_Yb8E2Kb2";
+const db=supabase.createClient(URL,KEY);
+let recipes=[];
+
+async function login(){
+ const email=document.getElementById("email").value.trim();
+ const password=document.getElementById("password").value;
+ const m=document.getElementById("msg");
+ m.textContent="Connexion...";
+ const {error}=await db.auth.signInWithPassword({email,password});
+ if(error){m.textContent="❌ "+error.message;return}
+ await start();
+}
+
+async function start(){
+ const {data:{session}}=await db.auth.getSession();
+ if(!session){document.getElementById("login").classList.remove("hidden");document.getElementById("app").classList.add("hidden");return}
+ document.getElementById("login").classList.add("hidden");
+ document.getElementById("app").classList.remove("hidden");
+ loadRecipes();
+}
+
+async function logout(){await db.auth.signOut();start()}
+
+async function loadRecipes(){
+ const {data,error}=await db.from("recipes").select("*").order("created_at",{ascending:false});
+ if(error){document.getElementById("recipes").innerHTML='<div class="box">❌ '+error.message+'</div>';return}
+ recipes=data||[];render();
+}
+
+function render(){
+ const q=document.getElementById("search").value.toLowerCase();
+ const f=document.getElementById("filter").value;
+ const list=recipes.filter(r=>
+ (!q||r.title.toLowerCase().includes(q)||(r.ingredients||[]).join(" ").toLowerCase().includes(q))
+ &&(!f||r.category===f||(f==="⭐ Nos incontournables"&&r.is_favorite)||(f==="🧪 À tester"&&r.status==="a_tester")||(f==="🤖 TM7"&&r.is_tm7)||(f==="🇱🇴 Recettes lorraines"&&r.is_lorraine))
+ );
+ const el=document.getElementById("recipes");
+ if(!list.length){el.innerHTML='<div class="box empty">🍽️ Aucune recette trouvée.</div>';return}
+ el.innerHTML=list.map(r=>`
+ <div class="box recipe">
+ <h3>${esc(r.is_favorite?"❤️ ":"")}${esc(r.title)}</h3>
+ <div class="meta">${esc(r.category)} · ${r.servings||"?"} portions ${r.prep_time_minutes?"· "+r.prep_time_minutes+" min préparation":""} ${r.cook_time_minutes?"· "+r.cook_time_minutes+" min cuisson":""}</div>
+ <div class="tags">${r.status==="validee"?'<span class="tag">⭐ Validée</span>':'<span class="tag">🧪 À tester</span>'}${r.is_tm7?'<span class="tag">🤖 TM7</span>':''}${r.is_lorraine?'<span class="tag">🇱🇴 Lorraine</span>':''}</div>
+ <details><summary>Voir la recette</summary>
+ <h4>🥕 Ingrédients</h4><ul>${(r.ingredients||[]).map(x=>"<li>"+esc(x)+"</li>").join("")}</ul>
+ <h4>👨‍🍳 Préparation</h4><ol>${(r.steps||[]).map(x=>"<li>"+esc(x)+"</li>").join("")}</ol>
+ ${r.adaptations?'<h4>🔄 Adaptations</h4><p>'+esc(r.adaptations)+'</p>':''}
+ ${r.tips?'<h4>💡 Nos astuces</h4><p>'+esc(r.tips)+'</p>':''}
+ <div class="row"><button onclick="editRecipe(${r.id})">✏️ Modifier</button><button class="danger" onclick="deleteRecipe(${r.id})">🗑️ Supprimer</button></div>
+ </details>
+ </div>`).join("");
+}
+
+function esc(x){return String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+function showForm(){
+ document.getElementById("form").classList.remove("hidden");
+ document.getElementById("formTitle").textContent="➕ Nouvelle recette";
+ document.getElementById("editId").value="";
+ ["title","servings","prep","cook","ingredients","steps","adaptations","tips"].forEach(id=>document.getElementById(id).value="");
+ document.getElementById("status").value="a_tester";
+ ["tm7","lorraine","favorite"].forEach(id=>document.getElementById(id).checked=false);
+ scrollTo({top:0,behavior:"smooth"});
+}
+function hideForm(){document.getElementById("form").classList.add("hidden")}
+
+async function saveRecipe(){
+ const {data:{user}}=await db.auth.getUser();
+ const id=document.getElementById("editId").value;
+ const obj={
+ title:document.getElementById("title").value.trim(),
+ category:document.getElementById("category").value,
+ status:document.getElementById("status").value,
+ servings:+document.getElementById("servings").value||null,
+ prep_time_minutes:+document.getElementById("prep").value||null,
+ cook_time_minutes:+document.getElementById("cook").value||null,
+ ingredients:document.getElementById("ingredients").value.split("\n").map(x=>x.trim()).filter(Boolean),
+ steps:document.getElementById("steps").value.split("\n").map(x=>x.trim()).filter(Boolean),
+ adaptations:document.getElementById("adaptations").value,
+ tips:document.getElementById("tips").value,
+ is_tm7:document.getElementById("tm7").checked,
+ is_lorraine:document.getElementById("lorraine").checked,
+ is_favorite:document.getElementById("favorite").checked
+ };
+ if(!obj.title){alert("Il faut donner un nom à la recette ❤️");return}
+ let res=id?await db.from("recipes").update(obj).eq("id",id):await db.from("recipes").insert({...obj,created_by:user.id});
+ if(res.error){alert("Erreur : "+res.error.message);return}
+ hideForm();loadRecipes();
+}
+
+function editRecipe(id){
+ const r=recipes.find(x=>x.id===id);if(!r)return;
+ document.getElementById("editId").value=r.id;
+ document.getElementById("formTitle").textContent="✏️ Modifier la recette";
+ document.getElementById("title").value=r.title;
+ document.getElementById("category").value=r.category;
+ document.getElementById("servings").value=r.servings||"";
+ document.getElementById("prep").value=r.prep_time_minutes||"";
+ document.getElementById("cook").value=r.cook_time_minutes||"";
+ document.getElementById("ingredients").value=(r.ingredients||[]).join("\n");
+ document.getElementById("steps").value=(r.steps||[]).join("\n");
+ document.getElementById("adaptations").value=r.adaptations||"";
+ document.getElementById("tips").value=r.tips||"";
+ document.getElementById("status").value=r.status;
+ document.getElementById("tm7").checked=r.is_tm7;
+ document.getElementById("lorraine").checked=r.is_lorraine;
+ document.getElementById("favorite").checked=r.is_favorite;
+ document.getElementById("form").classList.remove("hidden");
+ scrollTo({top:0,behavior:"smooth"});
+}
+
+async function deleteRecipe(id){
+ if(!confirm("Supprimer cette recette ?"))return;
+ const {error}=await db.from("recipes").delete().eq("id",id);
+ if(error)alert(error.message);else loadRecipes();
+}
+
+db.auth.onAuthStateChange(()=>setTimeout(start,0));
+start();
+</script>
+</body>
+</html>
